@@ -256,27 +256,45 @@ def exclude_bias_and_norm(p):
     return p.ndim == 1
 
 
-class GaussianBlur(object):
-    def __init__(self, p):
+class ProbabilisticAugmentation:
+    """Apply a transformation with probability p
+    call_p : called with proba p (default identity)
+    call_1_minus_p : called with proba 1-p (default identity)
+    """
+
+    def __init__(self, p=None, enable=True):
         self.p = p
+        if enable:
+            self.transform = self.call_p if p is None else self.probabilistic_call
+        else:
+            self.transform = lambda x: x  # identity
+        print("init")
+
+    def call_p(self, img):
+        return img
+
+    def call_1_minus_p(self, img):
+        return img
+
+    def probabilistic_call(self, img):
+        if random.random() < self.p:
+            return self.call_p(img)
+        else:
+            return self.call_1_minus_p(img)
 
     def __call__(self, img):
-        if random.random() < self.p:
-            sigma = random.random() * 1.9 + 0.1
-            return img.filter(ImageFilter.GaussianBlur(sigma))
-        else:
-            return img
+        self.transform(img)
 
 
-class Solarization(object):
-    def __init__(self, p):
-        self.p = p
+class GaussianBlur(ProbabilisticAugmentation):
+    def call_p(self, img):
+        sigma = random.random() * 1.9 + 0.1
+        return img.filter(ImageFilter.GaussianBlur(sigma))
 
-    def __call__(self, img):
-        if random.random() < self.p:
-            return ImageOps.solarize(img)
-        else:
-            return img
+
+class Solarization(ProbabilisticAugmentation):
+    def call_p(self, img):
+        return ImageOps.solarize(img)
 
 
 class Transform:
@@ -290,8 +308,8 @@ class Transform:
                 p=0.8
             ),
             transforms.RandomGrayscale(p=0.2),
-            GaussianBlur(p=1.0),
-            Solarization(p=0.0),
+            GaussianBlur(),
+            Solarization(enable=False),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])
